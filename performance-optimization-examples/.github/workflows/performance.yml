@@ -1,0 +1,197 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start preview server
+        run: |
+          npm run preview &
+          sleep 10
+        
+      - name: Wait for server
+        run: |
+          npx wait-on http://localhost:3001 --timeout 60000
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli@0.12.x
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Bundle size check
+        run: npm run size-check
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: lighthouse-results
+          path: .lighthouseci/
+
+  bundle-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and analyze bundle
+        run: |
+          npm run build
+          npm run analyze
+
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v3
+        with:
+          name: bundle-analysis
+          path: dist/bundle-analysis.html
+
+      - name: Comment bundle size
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          skip_step: install
+
+  performance-regression:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies (base)
+        run: npm ci
+
+      - name: Build application (base)
+        run: npm run build
+
+      - name: Start preview server (base)
+        run: |
+          npm run preview &
+          sleep 10
+
+      - name: Run Lighthouse (base)
+        run: |
+          npm install -g @lhci/cli@0.12.x
+          lhci autorun --config=lighthouse.config.js
+          mv .lighthouseci .lighthouseci-base
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+
+      - name: Install dependencies (PR)
+        run: npm ci
+
+      - name: Build application (PR)
+        run: npm run build
+
+      - name: Start preview server (PR)
+        run: |
+          pkill -f "preview" || true
+          npm run preview &
+          sleep 10
+
+      - name: Run Lighthouse (PR)
+        run: |
+          lhci autorun --config=lighthouse.config.js
+          mv .lighthouseci .lighthouseci-pr
+
+      - name: Compare performance
+        run: |
+          node scripts/compare-performance.js
+
+      - name: Comment performance comparison
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'performance-comparison.md';
+            
+            if (fs.existsSync(path)) {
+              const comparison = fs.readFileSync(path, 'utf8');
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comparison
+              });
+            }
+
+  security-and-performance:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=moderate
+
+      - name: Check for unused dependencies
+        run: |
+          npm install -g depcheck
+          depcheck --ignores="@types/*,eslint-*,@typescript-eslint/*"
+
+      - name: Vulnerability scan
+        run: |
+          npm install -g snyk
+          snyk test --severity-threshold=high
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Performance budget check
+        run: |
+          npm run build
+          node scripts/check-performance-budget.js
