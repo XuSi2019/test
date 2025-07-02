@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Weather Widget</string>
+    <string name="widget_description">Weather information widget</string>
+    <string name="widget_name">Weather Widget</string>
+    <string name="temperature_celsius">Celsius</string>
+    <string name="temperature_fahrenheit">Fahrenheit</string>
+    <string name="location_permission_required">Location permission required</string>
+    <string name="weather_loading">Loading weather data...</string>
+    <string name="weather_error">Failed to load weather data</string>
+    <string name="retry">Retry</string>
+    <string name="refresh">Refresh</string>
+    <string name="search">Search</string>
+    <string name="current_location">Current Location</string>
+    <string name="search_location">Search Location</string>
+    <string name="toggle_temperature_unit">Toggle Temperature Unit</string>
+    <string name="feels_like">Feels like %s</string>
+    <string name="humidity">Humidity</string>
+    <string name="wind_speed">Wind</string>
+    <string name="pressure">Pressure</string>
+    <string name="visibility">Visibility</string>
+    <string name="uv_index">UV Index</string>
+    <string name="wind_direction">Wind Dir</string>
+    <string name="forecast_7_day">7-Day Forecast</string>
+    <string name="weather_details">Weather Details</string>
+</resources>
